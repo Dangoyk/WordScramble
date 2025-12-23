@@ -12,7 +12,8 @@ let gameState = {
     startTime: null,
     elapsedTime: 0,
     timerInterval: null,
-    words: null
+    words: null,
+    recentWords: [] // Track recently used words to avoid repetition
 };
 
 // DOM Elements
@@ -36,28 +37,110 @@ const elements = {
     wordsSolved: document.getElementById('words-solved'),
     bestStreak: document.getElementById('best-streak'),
     timePlayed: document.getElementById('time-played'),
-    difficultyButtons: document.querySelectorAll('.btn-difficulty')
+    difficultyButtons: document.querySelectorAll('.btn-difficulty'),
+    tutorialBtn: document.getElementById('tutorial-btn'),
+    tutorialModal: document.getElementById('tutorial-modal'),
+    tutorialClose: document.getElementById('tutorial-close'),
+    streakBonus: document.getElementById('streak-bonus')
 };
 
-// Load words from JSON file
+// Load words from API or JSON file
 async function loadWords() {
+    // First try to load from JSON file
     try {
         const response = await fetch('words.json');
         gameState.words = await response.json();
     } catch (error) {
-        console.error('Error loading words:', error);
-        // Fallback word lists if JSON fails to load
+        console.error('Error loading words from JSON:', error);
+        gameState.words = null;
+    }
+    
+    // If JSON failed or we want more words, fetch from API
+    if (!gameState.words) {
         gameState.words = {
-            easy: ['CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'TREE', 'BOOK', 'BALL', 'FISH', 'BIRD'],
-            medium: ['COMPUTER', 'ELEPHANT', 'MOUNTAIN', 'OCEAN', 'LIBRARY', 'BUTTERFLY', 'ADVENTURE', 'JOURNEY', 'WONDER', 'MAGIC'],
-            hard: ['EXTRAORDINARY', 'PHENOMENON', 'SOPHISTICATED', 'ARCHITECTURE', 'PHILOSOPHY', 'REVOLUTIONARY', 'EXTRAVAGANT', 'MAGNIFICENT', 'TREMENDOUS', 'FANTASTIC']
+            easy: [],
+            medium: [],
+            hard: []
         };
     }
+    
+    // Fetch additional words from free API
+    await fetchWordsFromAPI();
+}
+
+// Fetch words from Random Words API
+async function fetchWordsFromAPI() {
+    try {
+        // Using a free word API - Random Words API
+        // Fetch multiple words for each difficulty
+        const easyWords = await fetchRandomWords(30, 3, 6); // 30 words, 3-6 letters
+        const mediumWords = await fetchRandomWords(30, 7, 10); // 30 words, 7-10 letters
+        const hardWords = await fetchRandomWords(20, 11, 15); // 20 words, 11-15 letters
+        
+        // Merge with existing words
+        if (easyWords.length > 0) {
+            gameState.words.easy = [...(gameState.words.easy || []), ...easyWords];
+        }
+        if (mediumWords.length > 0) {
+            gameState.words.medium = [...(gameState.words.medium || []), ...mediumWords];
+        }
+        if (hardWords.length > 0) {
+            gameState.words.hard = [...(gameState.words.hard || []), ...hardWords];
+        }
+    } catch (error) {
+        console.error('Error fetching words from API:', error);
+        // Use fallback if API fails
+        if (!gameState.words || Object.keys(gameState.words).length === 0) {
+            gameState.words = {
+                easy: ['CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'TREE', 'BOOK', 'BALL', 'FISH', 'BIRD', 'HOME', 'LOVE', 'TIME', 'FIRE', 'WATER', 'EARTH', 'WIND', 'SNOW', 'RAIN', 'CLOUD'],
+                medium: ['COMPUTER', 'ELEPHANT', 'MOUNTAIN', 'OCEAN', 'LIBRARY', 'BUTTERFLY', 'ADVENTURE', 'JOURNEY', 'WONDER', 'MAGIC', 'BEAUTIFUL', 'HAPPINESS', 'FRIENDSHIP', 'KNOWLEDGE', 'EDUCATION'],
+                hard: ['EXTRAORDINARY', 'PHENOMENON', 'SOPHISTICATED', 'ARCHITECTURE', 'PHILOSOPHY', 'REVOLUTIONARY', 'EXTRAVAGANT', 'MAGNIFICENT', 'TREMENDOUS', 'FANTASTIC']
+            };
+        }
+    }
+}
+
+// Fetch random words from API
+async function fetchRandomWords(count, minLength, maxLength) {
+    const words = [];
+    const attempts = Math.min(count, 50); // Limit API calls
+    
+    for (let i = 0; i < attempts; i++) {
+        try {
+            // Using Random Words API (free, no key required)
+            const response = await fetch(`https://random-word-api.herokuapp.com/word?length=${Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength}`);
+            const data = await response.json();
+            
+            if (data && data[0]) {
+                const word = data[0].toUpperCase();
+                // Filter out words with special characters or numbers
+                if (/^[A-Z]+$/.test(word) && word.length >= minLength && word.length <= maxLength) {
+                    if (!words.includes(word)) {
+                        words.push(word);
+                        if (words.length >= count) break;
+                    }
+                }
+            }
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+            console.warn('Error fetching word from API:', error);
+            // Continue with next word
+        }
+    }
+    
+    return words;
 }
 
 // Initialize game
 async function init() {
-    await loadWords();
+    // Load words - start with JSON, then fetch API words in background
+    loadWords().then(() => {
+        console.log('Words loaded successfully');
+    }).catch(err => {
+        console.error('Error loading words:', err);
+    });
     setupEventListeners();
 }
 
@@ -115,6 +198,22 @@ function setupEventListeners() {
     elements.timerToggle.addEventListener('change', (e) => {
         gameState.timerEnabled = e.target.checked;
     });
+    
+    // Tutorial
+    elements.tutorialBtn.addEventListener('click', () => {
+        elements.tutorialModal.classList.remove('hidden');
+    });
+    
+    elements.tutorialClose.addEventListener('click', () => {
+        elements.tutorialModal.classList.add('hidden');
+    });
+    
+    // Close tutorial on outside click
+    elements.tutorialModal.addEventListener('click', (e) => {
+        if (e.target === elements.tutorialModal) {
+            elements.tutorialModal.classList.add('hidden');
+        }
+    });
 }
 
 // Show specific screen
@@ -148,6 +247,7 @@ function resetGame() {
     gameState.elapsedTime = 0;
     gameState.hintRevealed = 0;
     gameState.startTime = null;
+    gameState.recentWords = []; // Reset recent words for new game
     stopTimer();
     updateUI();
     clearFeedback();
@@ -161,9 +261,33 @@ function loadWord(difficulty) {
     if (!gameState.words || !gameState.words[difficulty]) {
         return null;
     }
+    
     const wordList = gameState.words[difficulty];
-    const randomIndex = Math.floor(Math.random() * wordList.length);
-    return wordList[randomIndex].toUpperCase();
+    
+    // Filter out recently used words
+    const availableWords = wordList.filter(word => {
+        const upperWord = word.toUpperCase();
+        return !gameState.recentWords.includes(upperWord);
+    });
+    
+    // If we've used all words, reset the recent words list (but keep current word)
+    if (availableWords.length === 0) {
+        const currentWord = gameState.currentWord;
+        gameState.recentWords = currentWord ? [currentWord] : [];
+        // Retry with full list
+        const retryWords = wordList.filter(word => {
+            const upperWord = word.toUpperCase();
+            return !gameState.recentWords.includes(upperWord);
+        });
+        if (retryWords.length > 0) {
+            const randomIndex = Math.floor(Math.random() * retryWords.length);
+            return retryWords[randomIndex].toUpperCase();
+        }
+    }
+    
+    // Select from available words
+    const randomIndex = Math.floor(Math.random() * availableWords.length);
+    return availableWords[randomIndex].toUpperCase();
 }
 
 function loadNewWord() {
@@ -172,6 +296,13 @@ function loadNewWord() {
         showFeedback('Error loading word. Please refresh the page.', 'incorrect');
         return;
     }
+    
+    // Add word to recent words list (keep last 20 words)
+    gameState.recentWords.push(gameState.currentWord);
+    if (gameState.recentWords.length > 20) {
+        gameState.recentWords.shift(); // Remove oldest word
+    }
+    
     gameState.scrambledWord = shuffleWord(gameState.currentWord);
     gameState.hintRevealed = 0;
     
@@ -254,13 +385,19 @@ function checkAnswer() {
 
     if (userInput === gameState.currentWord) {
         // Correct answer
-        const points = calculateScore(gameState.currentWord.length, gameState.elapsedTime);
-        gameState.score += points;
         gameState.streak += 1;
         gameState.wordsSolved += 1;
         
         if (gameState.streak > gameState.bestStreak) {
             gameState.bestStreak = gameState.streak;
+        }
+        
+        const points = calculateScore(gameState.currentWord.length, gameState.elapsedTime);
+        gameState.score += points;
+        
+        // Show streak bonus effect
+        if (gameState.streak > 1) {
+            showStreakBonus(gameState.streak);
         }
         
         showFeedback(`Correct! +${points} points`, 'correct');
@@ -278,6 +415,25 @@ function checkAnswer() {
     }
 }
 
+// Show streak bonus animation
+function showStreakBonus(streak) {
+    const bonusElement = elements.streakBonus;
+    const multiplier = (1 + (streak * 0.5)).toFixed(1);
+    bonusElement.textContent = `${multiplier}x STREAK!`;
+    bonusElement.classList.remove('hidden');
+    bonusElement.style.animation = 'none';
+    
+    // Trigger animation
+    setTimeout(() => {
+        bonusElement.style.animation = 'streakPulse 0.6s ease-out';
+    }, 10);
+    
+    // Hide after animation
+    setTimeout(() => {
+        bonusElement.classList.add('hidden');
+    }, 600);
+}
+
 // Calculate score
 function calculateScore(wordLength, timeElapsed) {
     // Base points from word length
@@ -289,8 +445,9 @@ function calculateScore(wordLength, timeElapsed) {
         basePoints += timeBonus;
     }
     
-    // Streak multiplier
-    const streakMultiplier = 1 + (gameState.streak * 0.1);
+    // Streak multiplier - increases more dramatically for video game feel
+    // 1x, 1.5x, 2x, 2.5x, 3x, etc.
+    const streakMultiplier = 1 + (gameState.streak * 0.5);
     
     return Math.floor(basePoints * streakMultiplier);
 }
@@ -338,8 +495,13 @@ function clearFeedback() {
 
 // Update UI
 function updateUI() {
-    elements.score.textContent = gameState.score;
+    elements.score.textContent = gameState.score.toLocaleString();
     elements.streak.textContent = gameState.streak;
+    
+    // Highlight stats with pulse effect
+    highlightStat('score');
+    highlightStat('streak');
+    highlightStat('timer');
     
     if (gameState.timerEnabled) {
         const minutes = Math.floor(gameState.elapsedTime / 60);
@@ -347,6 +509,17 @@ function updateUI() {
         elements.timer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     } else {
         elements.timer.textContent = '--:--';
+    }
+}
+
+// Highlight stat with pulse effect
+function highlightStat(statName) {
+    const statElement = elements[statName].closest('.stat-item');
+    if (statElement) {
+        statElement.classList.add('pulse');
+        setTimeout(() => {
+            statElement.classList.remove('pulse');
+        }, 300);
     }
 }
 

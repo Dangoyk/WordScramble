@@ -14,19 +14,59 @@
     </div>
 
     <div class="container">
+        <!-- Tutorial Button -->
+        <button class="tutorial-btn" id="tutorial-btn" aria-label="Tutorial">?</button>
+        
+        <!-- Tutorial Modal -->
+        <div class="tutorial-modal hidden" id="tutorial-modal">
+            <div class="tutorial-content">
+                <button class="tutorial-close" id="tutorial-close">&times;</button>
+                <h2>How to Play</h2>
+                <div class="tutorial-section">
+                    <h3>Objective</h3>
+                    <p>Unscramble the letters to form the correct word. Type your answer and it will automatically submit when complete.</p>
+                </div>
+                <div class="tutorial-section">
+                    <h3>Controls</h3>
+                    <ul>
+                        <li><strong>Type</strong> - Enter letters to form your answer</li>
+                        <li><strong>Backspace</strong> - Clears the entire input</li>
+                        <li><strong>Enter</strong> - Manually submit your answer</li>
+                    </ul>
+                </div>
+                <div class="tutorial-section">
+                    <h3>Scoring</h3>
+                    <ul>
+                        <li><strong>Base Points</strong> - Word length × 10</li>
+                        <li><strong>Speed Bonus</strong> - Faster answers earn more points</li>
+                        <li><strong>Streak Bonus</strong> - Consecutive correct answers multiply your score!</li>
+                    </ul>
+                </div>
+                <div class="tutorial-section">
+                    <h3>Difficulty Levels</h3>
+                    <ul>
+                        <li><strong>Easy</strong> - Short words (3-6 letters)</li>
+                        <li><strong>Medium</strong> - Medium words (7-10 letters)</li>
+                        <li><strong>Hard</strong> - Long words (11+ letters)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Game Area -->
         <header class="game-header">
             <h1>Word Scramble</h1>
             <div class="game-stats">
-                <div class="stat-item">
+                <div class="stat-item stat-highlight">
                     <span class="stat-label">Score:</span>
                     <span class="stat-value" id="score">0</span>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item stat-highlight">
                     <span class="stat-label">Streak:</span>
                     <span class="stat-value" id="streak">0</span>
+                    <div class="streak-bonus hidden" id="streak-bonus">+50%</div>
                 </div>
-                <div class="stat-item">
+                <div class="stat-item stat-highlight">
                     <span class="stat-label">Time:</span>
                     <span class="stat-value" id="timer">0</span>
                 </div>
