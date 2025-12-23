@@ -15,8 +15,11 @@ let gameState = {
     words: null,
     recentWords: [], // Track recently used words to avoid repetition
     soundEnabled: true,
+    musicEnabled: true,
     soundVolume: 0.5,
-    ambientPlaying: false
+    ambientPlaying: false,
+    streakProgress: 0, // 0-100 for streak bar
+    streakDecayInterval: null
 };
 
 // Audio Context
@@ -85,7 +88,7 @@ function playIncorrectSound() {
 }
 
 function startAmbientSound() {
-    if (!elements.backgroundMusic || !gameState.soundEnabled || gameState.ambientPlaying) return;
+    if (!elements.backgroundMusic || !gameState.musicEnabled || gameState.ambientPlaying) return;
     
     try {
         // Set volume to be quiet (20% volume)
@@ -121,22 +124,36 @@ function stopAmbientSound() {
 }
 
 function toggleSound() {
+    // Toggle typing/effect sounds
     gameState.soundEnabled = !gameState.soundEnabled;
-    if (gameState.soundEnabled) {
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
+    if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    updateSoundButton();
+}
+
+function toggleMusic() {
+    // Toggle background music
+    gameState.musicEnabled = !gameState.musicEnabled;
+    if (gameState.musicEnabled) {
         startAmbientSound();
     } else {
         stopAmbientSound();
     }
-    updateSoundButton();
+    updateMusicButton();
 }
 
 function updateSoundButton() {
     if (elements.soundBtn) {
         elements.soundBtn.textContent = gameState.soundEnabled ? '🔊' : '🔇';
-        elements.soundBtn.title = gameState.soundEnabled ? 'Sound On' : 'Sound Off';
+        elements.soundBtn.title = gameState.soundEnabled ? 'Sound Effects On' : 'Sound Effects Off';
+    }
+}
+
+function updateMusicButton() {
+    if (elements.musicBtn) {
+        elements.musicBtn.textContent = gameState.musicEnabled ? '🎵' : '🔇';
+        elements.musicBtn.title = gameState.musicEnabled ? 'Music On' : 'Music Off';
     }
 }
 
@@ -157,6 +174,7 @@ const elements = {
     startBtn: document.getElementById('start-btn'),
     playAgainBtn: document.getElementById('play-again-btn'),
     timerToggle: document.getElementById('timer-toggle'),
+    exitBtn: document.getElementById('exit-btn'),
     finalScore: document.getElementById('final-score'),
     wordsSolved: document.getElementById('words-solved'),
     bestStreak: document.getElementById('best-streak'),
@@ -167,7 +185,9 @@ const elements = {
     tutorialClose: document.getElementById('tutorial-close'),
     streakBonus: document.getElementById('streak-bonus'),
     soundBtn: document.getElementById('sound-btn'),
-    backgroundMusic: document.getElementById('background-music')
+    musicBtn: document.getElementById('music-btn'),
+    backgroundMusic: document.getElementById('background-music'),
+    streakBarFill: document.getElementById('streak-bar-fill')
 };
 
 // Default fallback words (always available)
@@ -291,14 +311,14 @@ async function init() {
         elements.backgroundMusic.loop = true;
     }
     
-    // Start ambient sound when page loads (if sound is enabled)
-    if (gameState.soundEnabled) {
-        // Wait for user interaction before starting audio
+    // Start ambient sound when page loads (if music is enabled)
+    // Wait for user interaction before starting audio (browser autoplay policy)
+    if (gameState.musicEnabled) {
         document.addEventListener('click', () => {
             if (audioContext && audioContext.state === 'suspended') {
                 audioContext.resume();
             }
-            if (gameState.soundEnabled && !gameState.ambientPlaying) {
+            if (gameState.musicEnabled && !gameState.ambientPlaying) {
                 startAmbientSound();
             }
         }, { once: true });
@@ -384,8 +404,14 @@ function setupEventListeners() {
         }
     });
     
-    // Sound toggle
+    // Sound toggles
     elements.soundBtn.addEventListener('click', toggleSound);
+    elements.musicBtn.addEventListener('click', toggleMusic);
+    
+    // Exit button
+    if (elements.exitBtn) {
+        elements.exitBtn.addEventListener('click', endRun);
+    }
 }
 
 // Show specific screen
@@ -409,6 +435,20 @@ function startGame() {
     showScreen('game');
     loadNewWord();
     startTimer();
+    startStreakDecay();
+}
+
+// End current run and return to home
+function endRun() {
+    // Stop all timers and intervals
+    stopTimer();
+    stopStreakDecay();
+    
+    // Reset game state
+    resetGame();
+    
+    // Return to start screen
+    showScreen('start');
 }
 
 // Reset game state
@@ -420,7 +460,9 @@ function resetGame() {
     gameState.hintRevealed = 0;
     gameState.startTime = null;
     gameState.recentWords = []; // Reset recent words for new game
+    gameState.streakProgress = 0; // Reset streak bar
     stopTimer();
+    stopStreakDecay();
     stopAmbientSound(); // Stop ambient when resetting
     updateUI();
     clearFeedback();
@@ -562,6 +604,29 @@ function shuffleWord(word) {
     return shuffled.join('');
 }
 
+// Helper function to check if two words are anagrams
+function areAnagrams(word1, word2) {
+    if (word1.length !== word2.length) return false;
+    
+    const sorted1 = word1.split('').sort().join('');
+    const sorted2 = word2.split('').sort().join('');
+    
+    return sorted1 === sorted2;
+}
+
+// Helper function to check if a word exists in any difficulty list
+function isValidWord(word) {
+    if (!gameState.words) return false;
+    
+    const allWords = [
+        ...(gameState.words.easy || []),
+        ...(gameState.words.medium || []),
+        ...(gameState.words.hard || [])
+    ];
+    
+    return allWords.includes(word.toUpperCase());
+}
+
 // Check answer
 function checkAnswer() {
     const userInput = elements.answerInput.value.trim().toUpperCase();
@@ -571,24 +636,35 @@ function checkAnswer() {
         return;
     }
 
-    if (userInput === gameState.currentWord) {
-        // Correct answer
+    // Check if it's an anagram of the scrambled word AND a valid word
+    const isAnagram = areAnagrams(userInput, gameState.currentWord);
+    const isValid = isValidWord(userInput);
+    
+    if (isAnagram && isValid) {
+        // Correct answer - any valid anagram is accepted
         playCorrectSound();
         
-        gameState.streak += 1;
         gameState.wordsSolved += 1;
         
-        if (gameState.streak > gameState.bestStreak) {
-            gameState.bestStreak = gameState.streak;
+        // Fill streak bar (add 25% per correct answer)
+        gameState.streakProgress += 25;
+        
+        // Check if streak bar is full
+        if (gameState.streakProgress >= 100) {
+            // Streak bar filled - reset and give bonus
+            gameState.streakProgress = 0;
+            gameState.streak += 1;
+            
+            if (gameState.streak > gameState.bestStreak) {
+                gameState.bestStreak = gameState.streak;
+            }
+            
+            // Show bonus effect
+            showStreakBonus();
         }
         
         const points = calculateScore(gameState.currentWord.length, gameState.elapsedTime);
         gameState.score += points;
-        
-        // Show streak bonus effect
-        if (gameState.streak > 1) {
-            showStreakBonus(gameState.streak);
-        }
         
         showFeedback(`Correct! +${points} points`, 'correct');
         updateUI();
@@ -599,8 +675,16 @@ function checkAnswer() {
         // Incorrect answer
         playIncorrectSound();
         
-        gameState.streak = 0;
-        showFeedback('Incorrect! Try again.', 'incorrect');
+        // Drop streak bar significantly (lose 50% or empty if less than 50%)
+        gameState.streakProgress = Math.max(0, gameState.streakProgress - 50);
+        
+        if (!isAnagram) {
+            showFeedback('Incorrect! Those letters don\'t match.', 'incorrect');
+        } else if (!isValid) {
+            showFeedback('Not a valid word!', 'incorrect');
+        } else {
+            showFeedback('Incorrect! Try again.', 'incorrect');
+        }
         updateUI();
         elements.answerInput.value = '';
         elements.answerInput.focus();
@@ -608,10 +692,9 @@ function checkAnswer() {
 }
 
 // Show streak bonus animation
-function showStreakBonus(streak) {
+function showStreakBonus() {
     const bonusElement = elements.streakBonus;
-    const multiplier = (1 + (streak * 0.5)).toFixed(1);
-    bonusElement.textContent = `${multiplier}x STREAK!`;
+    bonusElement.textContent = 'BONUS!';
     bonusElement.classList.remove('hidden');
     bonusElement.style.animation = 'none';
     
@@ -626,6 +709,42 @@ function showStreakBonus(streak) {
     }, 600);
 }
 
+// Start streak decay (bar decreases over time)
+function startStreakDecay() {
+    // Decay the streak bar every second
+    gameState.streakDecayInterval = setInterval(() => {
+        if (gameState.streakProgress > 0) {
+            // Decay by 2% per second
+            gameState.streakProgress = Math.max(0, gameState.streakProgress - 2);
+            updateStreakBar();
+        }
+    }, 1000);
+}
+
+// Stop streak decay
+function stopStreakDecay() {
+    if (gameState.streakDecayInterval) {
+        clearInterval(gameState.streakDecayInterval);
+        gameState.streakDecayInterval = null;
+    }
+}
+
+// Update streak bar visual
+function updateStreakBar() {
+    if (elements.streakBarFill) {
+        elements.streakBarFill.style.width = `${gameState.streakProgress}%`;
+        
+        // Change color based on progress
+        if (gameState.streakProgress >= 75) {
+            elements.streakBarFill.style.background = 'var(--correct-bg)';
+        } else if (gameState.streakProgress >= 50) {
+            elements.streakBarFill.style.background = 'var(--present-bg)';
+        } else {
+            elements.streakBarFill.style.background = 'var(--text-light)';
+        }
+    }
+}
+
 // Calculate score
 function calculateScore(wordLength, timeElapsed) {
     // Base points from word length
@@ -637,7 +756,7 @@ function calculateScore(wordLength, timeElapsed) {
         basePoints += timeBonus;
     }
     
-    // Streak multiplier - increases more dramatically for video game feel
+    // Streak multiplier based on current streak count
     // 1x, 1.5x, 2x, 2.5x, 3x, etc.
     const streakMultiplier = 1 + (gameState.streak * 0.5);
     
@@ -711,6 +830,9 @@ function clearFeedback() {
 function updateUI() {
     elements.score.textContent = gameState.score.toLocaleString();
     elements.streak.textContent = gameState.streak;
+    
+    // Update streak bar visual
+    updateStreakBar();
     
     // Highlight stats with pulse effect
     highlightStat('score');

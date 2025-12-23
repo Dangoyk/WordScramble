@@ -18,7 +18,10 @@
         <button class="tutorial-btn" id="tutorial-btn" aria-label="Tutorial">?</button>
         
         <!-- Sound Toggle Button -->
-        <button class="sound-btn" id="sound-btn" aria-label="Toggle Sound" title="Sound On">🔊</button>
+        <button class="sound-btn" id="sound-btn" aria-label="Toggle Sound Effects" title="Sound Effects On">🔊</button>
+        
+        <!-- Music Toggle Button -->
+        <button class="music-btn" id="music-btn" aria-label="Toggle Music" title="Music On">🎵</button>
         
         <!-- Tutorial Modal -->
         <div class="tutorial-modal hidden" id="tutorial-modal">
@@ -67,7 +70,12 @@
                 <div class="stat-item stat-highlight">
                     <span class="stat-label">Streak:</span>
                     <span class="stat-value" id="streak">0</span>
-                    <div class="streak-bonus hidden" id="streak-bonus">+50%</div>
+                    <div class="streak-bar-container">
+                        <div class="streak-bar" id="streak-bar">
+                            <div class="streak-bar-fill" id="streak-bar-fill"></div>
+                        </div>
+                    </div>
+                    <div class="streak-bonus hidden" id="streak-bonus">BONUS!</div>
                 </div>
                 <div class="stat-item stat-highlight">
                     <span class="stat-label">Time:</span>
@@ -99,6 +107,7 @@
 
         <!-- Game Screen -->
         <div class="screen hidden" id="game-screen">
+            <button class="exit-btn" id="exit-btn" aria-label="Exit to Home" title="Exit to Home">← Home</button>
             <div class="game-content">
                 <div class="difficulty-badge" id="current-difficulty">Easy</div>
                 
