@@ -13,8 +13,132 @@ let gameState = {
     elapsedTime: 0,
     timerInterval: null,
     words: null,
-    recentWords: [] // Track recently used words to avoid repetition
+    recentWords: [], // Track recently used words to avoid repetition
+    soundEnabled: true,
+    soundVolume: 0.5,
+    ambientPlaying: false
 };
+
+// Audio Context
+let audioContext = null;
+let ambientGainNode = null;
+let ambientOscillator = null;
+
+// Initialize Audio Context
+function initAudio() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Create gain node for ambient sound
+        ambientGainNode = audioContext.createGain();
+        ambientGainNode.gain.value = 0.08; // Very quiet ambient
+        ambientGainNode.connect(audioContext.destination);
+    } catch (error) {
+        console.log('Audio not supported:', error);
+    }
+}
+
+// Sound Generation Functions
+function playTone(frequency, duration, type = 'sine', volume = 0.3) {
+    if (!audioContext || !gameState.soundEnabled) return;
+    
+    try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.type = type;
+        oscillator.frequency.value = frequency;
+        
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(volume * gameState.soundVolume, audioContext.currentTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+    } catch (error) {
+        // Silently fail if audio fails
+    }
+}
+
+function playTypingSound() {
+    if (!gameState.soundEnabled) return;
+    // Quick, subtle typing sound
+    const freq = 800 + Math.random() * 200; // Random pitch variation
+    playTone(freq, 0.05, 'sine', 0.15);
+}
+
+function playCorrectSound() {
+    if (!gameState.soundEnabled) return;
+    // Pleasant ascending chord
+    playTone(523.25, 0.1, 'sine', 0.4); // C5
+    setTimeout(() => playTone(659.25, 0.1, 'sine', 0.4), 50); // E5
+    setTimeout(() => playTone(783.99, 0.15, 'sine', 0.4), 100); // G5
+}
+
+function playIncorrectSound() {
+    if (!gameState.soundEnabled) return;
+    // Lower, descending tone
+    playTone(300, 0.2, 'sawtooth', 0.3);
+    setTimeout(() => playTone(250, 0.2, 'sawtooth', 0.3), 100);
+}
+
+function startAmbientSound() {
+    if (!elements.backgroundMusic || !gameState.soundEnabled || gameState.ambientPlaying) return;
+    
+    try {
+        // Set volume to be quiet (20% volume)
+        elements.backgroundMusic.volume = 0.2;
+        elements.backgroundMusic.loop = true;
+        
+        // Play the background music
+        const playPromise = elements.backgroundMusic.play();
+        
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                gameState.ambientPlaying = true;
+            }).catch(error => {
+                // Autoplay was prevented, user interaction required
+                console.log('Background music requires user interaction');
+            });
+        }
+    } catch (error) {
+        console.log('Background music error:', error);
+    }
+}
+
+function stopAmbientSound() {
+    if (elements.backgroundMusic) {
+        try {
+            elements.backgroundMusic.pause();
+            elements.backgroundMusic.currentTime = 0;
+            gameState.ambientPlaying = false;
+        } catch (error) {
+            // Ignore errors
+        }
+    }
+}
+
+function toggleSound() {
+    gameState.soundEnabled = !gameState.soundEnabled;
+    if (gameState.soundEnabled) {
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        startAmbientSound();
+    } else {
+        stopAmbientSound();
+    }
+    updateSoundButton();
+}
+
+function updateSoundButton() {
+    if (elements.soundBtn) {
+        elements.soundBtn.textContent = gameState.soundEnabled ? '🔊' : '🔇';
+        elements.soundBtn.title = gameState.soundEnabled ? 'Sound On' : 'Sound Off';
+    }
+}
 
 // DOM Elements
 const elements = {
@@ -41,62 +165,72 @@ const elements = {
     tutorialBtn: document.getElementById('tutorial-btn'),
     tutorialModal: document.getElementById('tutorial-modal'),
     tutorialClose: document.getElementById('tutorial-close'),
-    streakBonus: document.getElementById('streak-bonus')
+    streakBonus: document.getElementById('streak-bonus'),
+    soundBtn: document.getElementById('sound-btn'),
+    backgroundMusic: document.getElementById('background-music')
+};
+
+// Default fallback words (always available)
+const defaultWords = {
+    easy: ['CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'TREE', 'BOOK', 'BALL', 'FISH', 'BIRD', 'HOME', 'LOVE', 'TIME', 'FIRE', 'WATER', 'EARTH', 'WIND', 'SNOW', 'RAIN', 'CLOUD', 'FLOWER', 'GARDEN', 'RIVER', 'OCEAN', 'MOUNTAIN', 'FOREST', 'BEACH', 'ISLAND', 'CITY', 'HOUSE', 'SCHOOL', 'FRIEND', 'FAMILY', 'MUSIC', 'DANCE', 'SING', 'PLAY', 'GAME', 'TOY', 'CAKE', 'COOKIE', 'PIZZA', 'APPLE', 'BANANA', 'ORANGE', 'CAR', 'BIKE', 'TRAIN', 'PLANE', 'SHIP'],
+    medium: ['COMPUTER', 'ELEPHANT', 'MOUNTAIN', 'LIBRARY', 'BUTTERFLY', 'ADVENTURE', 'JOURNEY', 'WONDER', 'MAGIC', 'BEAUTIFUL', 'HAPPINESS', 'FRIENDSHIP', 'KNOWLEDGE', 'EDUCATION', 'TEACHER', 'STUDENT', 'SCIENCE', 'NATURE', 'OCEAN', 'WEATHER', 'SEASON', 'HOLIDAY', 'CELEBRATION', 'BIRTHDAY', 'WEDDING', 'TRAVEL', 'VACATION', 'EXPLORE', 'DISCOVER', 'CREATIVE', 'ARTISTIC', 'MUSICAL', 'INSTRUMENT', 'CONCERT', 'PERFORMANCE', 'THEATER', 'MOVIE', 'STORY', 'NOVEL', 'CHARACTER', 'PLOT', 'SETTING', 'AUTHOR', 'WRITER', 'POETRY', 'POEM', 'RHYME', 'VERSE', 'STANZA', 'METAPHOR'],
+    hard: ['EXTRAORDINARY', 'PHENOMENON', 'SOPHISTICATED', 'ARCHITECTURE', 'PHILOSOPHY', 'REVOLUTIONARY', 'EXTRAVAGANT', 'MAGNIFICENT', 'TREMENDOUS', 'FANTASTIC', 'SPECTACULAR', 'REMARKABLE', 'EXCEPTIONAL', 'OUTSTANDING', 'IMPRESSIVE', 'BRILLIANT', 'GENIUS', 'INTELLIGENT', 'KNOWLEDGEABLE', 'EDUCATED', 'PROFESSIONAL', 'EXPERIENCED', 'QUALIFIED', 'COMPETENT', 'CAPABLE', 'ACCOMPLISHED', 'ACHIEVEMENT', 'SUCCESSFUL', 'TRIUMPHANT', 'VICTORIOUS', 'CHAMPION', 'WINNER', 'CHALLENGE', 'DIFFICULTY', 'OBSTACLE', 'OPPORTUNITY', 'POSSIBILITY', 'POTENTIAL', 'PROMISING', 'ENCOURAGING', 'INSPIRING', 'MOTIVATING', 'ENCOURAGEMENT', 'INSPIRATION', 'MOTIVATION', 'DETERMINATION', 'PERSEVERANCE', 'DEDICATION', 'COMMITMENT', 'DEVOTION']
 };
 
 // Load words from API or JSON file
 async function loadWords() {
-    // First try to load from JSON file
+    // Initialize with default words first (so game can start immediately)
+    gameState.words = JSON.parse(JSON.stringify(defaultWords));
+    
+    // Try to load from JSON file (only works with http/https, not file://)
     try {
-        const response = await fetch('words.json');
-        gameState.words = await response.json();
+        // Check if we're in a browser environment that supports fetch
+        if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+            const response = await fetch('words.json');
+            if (response.ok) {
+                const jsonWords = await response.json();
+                // Merge JSON words with defaults
+                if (jsonWords.easy) gameState.words.easy = [...defaultWords.easy, ...jsonWords.easy];
+                if (jsonWords.medium) gameState.words.medium = [...defaultWords.medium, ...jsonWords.medium];
+                if (jsonWords.hard) gameState.words.hard = [...defaultWords.hard, ...jsonWords.hard];
+            }
+        }
     } catch (error) {
-        console.error('Error loading words from JSON:', error);
-        gameState.words = null;
+        // Silently fail - we have default words
+        console.log('Using default words (JSON not available)');
     }
     
-    // If JSON failed or we want more words, fetch from API
-    if (!gameState.words) {
-        gameState.words = {
-            easy: [],
-            medium: [],
-            hard: []
-        };
+    // Try to fetch additional words from API (only if online)
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        try {
+            await fetchWordsFromAPI();
+        } catch (error) {
+            // Silently fail - we have default words
+            console.log('Using default words (API not available)');
+        }
     }
-    
-    // Fetch additional words from free API
-    await fetchWordsFromAPI();
 }
 
 // Fetch words from Random Words API
 async function fetchWordsFromAPI() {
-    try {
-        // Using a free word API - Random Words API
-        // Fetch multiple words for each difficulty
-        const easyWords = await fetchRandomWords(30, 3, 6); // 30 words, 3-6 letters
-        const mediumWords = await fetchRandomWords(30, 7, 10); // 30 words, 7-10 letters
-        const hardWords = await fetchRandomWords(20, 11, 15); // 20 words, 11-15 letters
-        
-        // Merge with existing words
-        if (easyWords.length > 0) {
-            gameState.words.easy = [...(gameState.words.easy || []), ...easyWords];
-        }
-        if (mediumWords.length > 0) {
-            gameState.words.medium = [...(gameState.words.medium || []), ...mediumWords];
-        }
-        if (hardWords.length > 0) {
-            gameState.words.hard = [...(gameState.words.hard || []), ...hardWords];
-        }
-    } catch (error) {
-        console.error('Error fetching words from API:', error);
-        // Use fallback if API fails
-        if (!gameState.words || Object.keys(gameState.words).length === 0) {
-            gameState.words = {
-                easy: ['CAT', 'DOG', 'SUN', 'MOON', 'STAR', 'TREE', 'BOOK', 'BALL', 'FISH', 'BIRD', 'HOME', 'LOVE', 'TIME', 'FIRE', 'WATER', 'EARTH', 'WIND', 'SNOW', 'RAIN', 'CLOUD'],
-                medium: ['COMPUTER', 'ELEPHANT', 'MOUNTAIN', 'OCEAN', 'LIBRARY', 'BUTTERFLY', 'ADVENTURE', 'JOURNEY', 'WONDER', 'MAGIC', 'BEAUTIFUL', 'HAPPINESS', 'FRIENDSHIP', 'KNOWLEDGE', 'EDUCATION'],
-                hard: ['EXTRAORDINARY', 'PHENOMENON', 'SOPHISTICATED', 'ARCHITECTURE', 'PHILOSOPHY', 'REVOLUTIONARY', 'EXTRAVAGANT', 'MAGNIFICENT', 'TREMENDOUS', 'FANTASTIC']
-            };
-        }
+    // Using a free word API - Random Words API
+    // Fetch multiple words for each difficulty
+    const easyWords = await fetchRandomWords(30, 3, 6); // 30 words, 3-6 letters
+    const mediumWords = await fetchRandomWords(30, 7, 10); // 30 words, 7-10 letters
+    const hardWords = await fetchRandomWords(20, 11, 15); // 20 words, 11-15 letters
+    
+    // Merge with existing words (avoid duplicates)
+    if (easyWords.length > 0) {
+        const uniqueEasy = easyWords.filter(word => !gameState.words.easy.includes(word));
+        gameState.words.easy = [...gameState.words.easy, ...uniqueEasy];
+    }
+    if (mediumWords.length > 0) {
+        const uniqueMedium = mediumWords.filter(word => !gameState.words.medium.includes(word));
+        gameState.words.medium = [...gameState.words.medium, ...uniqueMedium];
+    }
+    if (hardWords.length > 0) {
+        const uniqueHard = hardWords.filter(word => !gameState.words.hard.includes(word));
+        gameState.words.hard = [...gameState.words.hard, ...uniqueHard];
     }
 }
 
@@ -135,13 +269,40 @@ async function fetchRandomWords(count, minLength, maxLength) {
 
 // Initialize game
 async function init() {
-    // Load words - start with JSON, then fetch API words in background
+    // Initialize audio
+    initAudio();
+    
+    // Initialize words immediately with defaults (so game works right away)
+    gameState.words = JSON.parse(JSON.stringify(defaultWords));
+    
+    // Load additional words in background (JSON + API)
     loadWords().then(() => {
         console.log('Words loaded successfully');
     }).catch(err => {
-        console.error('Error loading words:', err);
+        console.log('Using default words only');
     });
+    
     setupEventListeners();
+    updateSoundButton();
+    
+    // Initialize background music volume (quiet - 20%)
+    if (elements.backgroundMusic) {
+        elements.backgroundMusic.volume = 0.2; // Quiet background music
+        elements.backgroundMusic.loop = true;
+    }
+    
+    // Start ambient sound when page loads (if sound is enabled)
+    if (gameState.soundEnabled) {
+        // Wait for user interaction before starting audio
+        document.addEventListener('click', () => {
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            if (gameState.soundEnabled && !gameState.ambientPlaying) {
+                startAmbientSound();
+            }
+        }, { once: true });
+    }
 }
 
 // Setup event listeners
@@ -162,10 +323,18 @@ function setupEventListeners() {
     elements.startBtn.addEventListener('click', startGame);
 
     // Auto-submit when word length matches
+    let lastInputLength = 0;
     elements.answerInput.addEventListener('input', (e) => {
         const input = e.target.value.toUpperCase();
         // Only allow letters and limit to current word length
         const filtered = input.replace(/[^A-Z]/g, '').slice(0, gameState.currentWord ? gameState.currentWord.length : 20);
+        
+        // Play typing sound if a new character was added
+        if (filtered.length > lastInputLength) {
+            playTypingSound();
+        }
+        lastInputLength = filtered.length;
+        
         e.target.value = filtered;
         
         // Auto-submit when length matches current word
@@ -214,6 +383,9 @@ function setupEventListeners() {
             elements.tutorialModal.classList.add('hidden');
         }
     });
+    
+    // Sound toggle
+    elements.soundBtn.addEventListener('click', toggleSound);
 }
 
 // Show specific screen
@@ -249,6 +421,7 @@ function resetGame() {
     gameState.startTime = null;
     gameState.recentWords = []; // Reset recent words for new game
     stopTimer();
+    stopAmbientSound(); // Stop ambient when resetting
     updateUI();
     clearFeedback();
     elements.hintDisplay.textContent = '';
@@ -258,8 +431,14 @@ function resetGame() {
 
 // Load new word
 function loadWord(difficulty) {
-    if (!gameState.words || !gameState.words[difficulty]) {
-        return null;
+    // Ensure words are initialized
+    if (!gameState.words) {
+        gameState.words = JSON.parse(JSON.stringify(defaultWords));
+    }
+    
+    if (!gameState.words[difficulty] || gameState.words[difficulty].length === 0) {
+        // Fallback to default words if difficulty list is empty
+        gameState.words[difficulty] = [...defaultWords[difficulty]];
     }
     
     const wordList = gameState.words[difficulty];
@@ -283,11 +462,20 @@ function loadWord(difficulty) {
             const randomIndex = Math.floor(Math.random() * retryWords.length);
             return retryWords[randomIndex].toUpperCase();
         }
+        // Last resort: use any word from the list
+        if (wordList.length > 0) {
+            const randomIndex = Math.floor(Math.random() * wordList.length);
+            return wordList[randomIndex].toUpperCase();
+        }
     }
     
     // Select from available words
-    const randomIndex = Math.floor(Math.random() * availableWords.length);
-    return availableWords[randomIndex].toUpperCase();
+    if (availableWords.length > 0) {
+        const randomIndex = Math.floor(Math.random() * availableWords.length);
+        return availableWords[randomIndex].toUpperCase();
+    }
+    
+    return null;
 }
 
 function loadNewWord() {
@@ -385,6 +573,8 @@ function checkAnswer() {
 
     if (userInput === gameState.currentWord) {
         // Correct answer
+        playCorrectSound();
+        
         gameState.streak += 1;
         gameState.wordsSolved += 1;
         
@@ -407,6 +597,8 @@ function checkAnswer() {
         loadNewWord();
     } else {
         // Incorrect answer
+        playIncorrectSound();
+        
         gameState.streak = 0;
         showFeedback('Incorrect! Try again.', 'incorrect');
         updateUI();
@@ -459,19 +651,41 @@ function revealHint() {
         return;
     }
     
+    // Get the next letter to reveal
+    const nextLetterIndex = gameState.hintRevealed;
+    const nextLetter = gameState.currentWord[nextLetterIndex];
+    
+    // Add the revealed letter to the input box at the correct position
+    const currentInput = elements.answerInput.value.toUpperCase();
+    const inputArray = currentInput.split('');
+    
+    // Ensure the input array is the right length
+    while (inputArray.length < gameState.currentWord.length) {
+        inputArray.push('');
+    }
+    
+    // Place the revealed letter at its correct position
+    inputArray[nextLetterIndex] = nextLetter;
+    
+    // Update the input value
+    elements.answerInput.value = inputArray.join('');
+    
+    // Update hint display
+    gameState.hintRevealed++;
     const hintArray = gameState.currentWord.split('').map((letter, index) => {
-        if (index <= gameState.hintRevealed) {
+        if (index <= gameState.hintRevealed - 1) {
             return letter;
         }
         return '_';
     });
-    
-    gameState.hintRevealed++;
     elements.hintDisplay.textContent = hintArray.join(' ');
     
     if (gameState.hintRevealed >= gameState.currentWord.length) {
         elements.hintBtn.disabled = true;
     }
+    
+    // Focus back on input
+    elements.answerInput.focus();
 }
 
 // Show feedback
