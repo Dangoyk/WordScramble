@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Scramble Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Ad Slot: Header Banner -->
+    <div class="ad-container ad-header" id="ad-header">
+        <!-- Ad placeholder - Replace with actual ad code -->
+        <div class="ad-placeholder">Ad Space (728x90)</div>
+    </div>
+
+    <div class="container">
+        <!-- Main Game Area -->
+        <header class="game-header">
+            <h1>Word Scramble</h1>
+            <div class="game-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Score:</span>
+                    <span class="stat-value" id="score">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Streak:</span>
+                    <span class="stat-value" id="streak">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Time:</span>
+                    <span class="stat-value" id="timer">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Start Screen -->
+        <div class="screen" id="start-screen">
+            <div class="screen-content">
+                <h2>Welcome to Word Scramble!</h2>
+                <p>Unscramble the letters to form a word</p>
+                <div class="difficulty-selector">
+                    <h3>Choose Difficulty:</h3>
+                    <button class="btn btn-difficulty" data-difficulty="easy">Easy</button>
+                    <button class="btn btn-difficulty" data-difficulty="medium">Medium</button>
+                    <button class="btn btn-difficulty" data-difficulty="hard">Hard</button>
+                </div>
+                <div class="settings-toggle">
+                    <label>
+                        <input type="checkbox" id="timer-toggle" checked>
+                        Enable Timer
+                    </label>
+                </div>
+                <button class="btn btn-primary" id="start-btn">Start Game</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div class="screen hidden" id="game-screen">
+            <div class="game-content">
+                <div class="difficulty-badge" id="current-difficulty">Easy</div>
+                
+                <div class="scrambled-word-container">
+                    <div class="scrambled-word" id="scrambled-word"></div>
+                </div>
+
+                <div class="input-section">
+                    <input 
+                        type="text" 
+                        id="answer-input" 
+                        placeholder="Type your answer..."
+                        autocomplete="off"
+                        spellcheck="false"
+                    >
+                </div>
+
+                <div class="hint-section">
+                    <button class="btn btn-hint" id="hint-btn">Get Hint</button>
+                    <div class="hint-display" id="hint-display"></div>
+                </div>
+
+                <div class="feedback" id="feedback"></div>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div class="screen hidden" id="game-over-screen">
+            <div class="screen-content">
+                <h2>Game Over!</h2>
+                <div class="final-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">Final Score</div>
+                        <div class="stat-value-large" id="final-score">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Words Solved</div>
+                        <div class="stat-value-large" id="words-solved">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Best Streak</div>
+                        <div class="stat-value-large" id="best-streak">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Time Played</div>
+                        <div class="stat-value-large" id="time-played">0s</div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" id="play-again-btn">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ad Slot: Sidebar (Desktop Only) -->
+    <div class="ad-container ad-sidebar" id="ad-sidebar">
+        <!-- Ad placeholder - Replace with actual ad code -->
+        <div class="ad-placeholder">Ad Space (300x250)</div>
+    </div>
+
+    <!-- Ad Slot: Footer Banner -->
+    <div class="ad-container ad-footer" id="ad-footer">
+        <!-- Ad placeholder - Replace with actual ad code -->
+        <div class="ad-placeholder">Ad Space (728x90)</div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
